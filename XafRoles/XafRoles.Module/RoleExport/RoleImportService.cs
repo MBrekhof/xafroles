@@ -10,14 +10,9 @@ public record ImportResult(int Updated, int Created);
 
 public static class RoleImportService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
     public static ImportResult Import(IObjectSpace objectSpace, string json)
     {
-        var document = JsonSerializer.Deserialize<RoleExportDocument>(json, JsonOptions)
+        var document = JsonSerializer.Deserialize<RoleExportDocument>(json, JsonSettings.Options)
             ?? throw new InvalidOperationException("Invalid role export file.");
 
         int updated = 0, created = 0;
@@ -163,14 +158,16 @@ public static class RoleImportService
 
     private static SecurityPermissionState? ParseState(string? value)
     {
-        if (string.IsNullOrEmpty(value))
-            return null;
-
-        return Enum.Parse<SecurityPermissionState>(value);
+        if (string.IsNullOrEmpty(value)) return null;
+        if (!Enum.TryParse<SecurityPermissionState>(value, out var state))
+            throw new InvalidOperationException($"Invalid permission state: '{value}'. Expected: Allow, Deny.");
+        return state;
     }
 
     private static SecurityPermissionPolicy ParsePermissionPolicy(string value)
     {
-        return Enum.Parse<SecurityPermissionPolicy>(value);
+        if (!Enum.TryParse<SecurityPermissionPolicy>(value, out var policy))
+            throw new InvalidOperationException($"Invalid permission policy: '{value}'. Expected: DenyAllByDefault, ReadAllByDefault, AllowAllByDefault.");
+        return policy;
     }
 }

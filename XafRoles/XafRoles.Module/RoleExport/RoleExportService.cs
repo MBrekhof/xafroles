@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using DevExpress.ExpressApp;
 using DevExpress.Persistent.BaseImpl.EF.PermissionPolicy;
 using XafRoles.Module.RoleExport.Dtos;
@@ -8,13 +7,6 @@ namespace XafRoles.Module.RoleExport;
 
 public static class RoleExportService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
     public static string Export(IObjectSpace objectSpace)
     {
         var roles = objectSpace.GetObjectsQuery<PermissionPolicyRole>(true).ToList();
@@ -23,7 +15,7 @@ public static class RoleExportService
             ExportedAt = DateTime.UtcNow,
             Roles = roles.Select(MapRole).ToList()
         };
-        return JsonSerializer.Serialize(document, JsonOptions);
+        return JsonSerializer.Serialize(document, JsonSettings.Options);
     }
 
     private static RoleDto MapRole(PermissionPolicyRole role)
@@ -34,7 +26,9 @@ public static class RoleExportService
             IsAdministrative = role.IsAdministrative,
             CanEditModel = role.CanEditModel,
             PermissionPolicy = role.PermissionPolicy.ToString(),
-            TypePermissions = role.TypePermissions.Select(MapTypePermission).ToList(),
+            TypePermissions = role.TypePermissions
+                .Where(tp => tp.TargetType != null)
+                .Select(MapTypePermission).ToList(),
             NavigationPermissions = role.NavigationPermissions.Select(MapNavigationPermission).ToList(),
             ActionPermissions = role.ActionPermissions.Select(MapActionPermission).ToList()
         };
