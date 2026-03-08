@@ -6,35 +6,50 @@ namespace XafRoles.Module.RoleExport;
 
 public class RoleExportImportController : ViewController<ListView>
 {
-    private readonly SimpleAction _exportAction;
-    private readonly SimpleAction _importAction;
+    private readonly PopupWindowShowAction _exportAction;
+    private readonly PopupWindowShowAction _importAction;
 
     public RoleExportImportController()
     {
         TargetObjectType = typeof(PermissionPolicyRole);
 
-        _exportAction = new SimpleAction(this, "ExportRoles", "Edit")
+        _exportAction = new PopupWindowShowAction(this, "ExportRoles", "Edit")
         {
             Caption = "Export Roles",
             ImageName = "Action_Export",
             SelectionDependencyType = SelectionDependencyType.Independent
         };
+        _exportAction.CustomizePopupWindowParams += ExportAction_CustomizePopup;
         _exportAction.Execute += ExportAction_Execute;
 
-        _importAction = new SimpleAction(this, "ImportRoles", "Edit")
+        _importAction = new PopupWindowShowAction(this, "ImportRoles", "Edit")
         {
             Caption = "Import Roles",
             ImageName = "Action_Import",
             SelectionDependencyType = SelectionDependencyType.Independent
         };
+        _importAction.CustomizePopupWindowParams += ImportAction_CustomizePopup;
         _importAction.Execute += ImportAction_Execute;
     }
 
-    private void ExportAction_Execute(object sender, SimpleActionExecuteEventArgs e)
+    private void ExportAction_CustomizePopup(object sender, CustomizePopupWindowParamsEventArgs e)
     {
+        var os = Application.CreateObjectSpace(typeof(RoleExportParameters));
+        var parameters = os.CreateObject<RoleExportParameters>();
+        e.View = Application.CreateDetailView(os, parameters);
+        e.DialogController.SaveOnAccept = false;
+    }
+
+    private void ExportAction_Execute(object sender, PopupWindowShowActionExecuteEventArgs e)
+    {
+        var parameters = (RoleExportParameters)e.PopupWindowViewCurrentObject;
+        var filePath = parameters.FilePath;
+
+        var directory = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            Directory.CreateDirectory(directory);
+
         var json = RoleExportService.Export(ObjectSpace);
-        var fileName = $"roles-export-{DateTime.Now:yyyy-MM-dd-HHmmss}.json";
-        var filePath = Path.Combine(Path.GetTempPath(), fileName);
         File.WriteAllText(filePath, json);
 
         Application.ShowViewStrategy.ShowMessage(
@@ -42,18 +57,28 @@ public class RoleExportImportController : ViewController<ListView>
             InformationType.Success);
     }
 
-    private void ImportAction_Execute(object sender, SimpleActionExecuteEventArgs e)
+    private void ImportAction_CustomizePopup(object sender, CustomizePopupWindowParamsEventArgs e)
     {
-        var importPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "roles-import.json");
-        if (!File.Exists(importPath))
+        var os = Application.CreateObjectSpace(typeof(RoleImportParameters));
+        var parameters = os.CreateObject<RoleImportParameters>();
+        e.View = Application.CreateDetailView(os, parameters);
+        e.DialogController.SaveOnAccept = false;
+    }
+
+    private void ImportAction_Execute(object sender, PopupWindowShowActionExecuteEventArgs e)
+    {
+        var parameters = (RoleImportParameters)e.PopupWindowViewCurrentObject;
+        var filePath = parameters.FilePath;
+
+        if (!File.Exists(filePath))
         {
             Application.ShowViewStrategy.ShowMessage(
-                $"Place the import file at: {importPath}",
-                InformationType.Warning);
+                $"File not found: {filePath}",
+                InformationType.Error);
             return;
         }
 
-        var json = File.ReadAllText(importPath);
+        var json = File.ReadAllText(filePath);
         var result = RoleImportService.Import(ObjectSpace, json);
         ObjectSpace.Refresh();
         View.Refresh();
