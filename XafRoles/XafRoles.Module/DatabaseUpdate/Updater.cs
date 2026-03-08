@@ -36,6 +36,8 @@ namespace XafRoles.Module.DatabaseUpdate
             // If a role doesn't exist in the database, create this role
             var defaultRole = CreateDefaultRole();
             var adminRole = CreateAdminRole();
+            var managerRole = CreateManagerRole();
+            var readOnlyRole = CreateReadOnlyRole();
 
             ObjectSpace.CommitChanges(); //This line persists created object(s).
 
@@ -102,6 +104,60 @@ namespace XafRoles.Module.DatabaseUpdate
                 defaultRole.AddTypePermissionsRecursively<ModelDifferenceAspect>(SecurityOperations.Create, SecurityPermissionState.Allow);
             }
             return defaultRole;
+        }
+        PermissionPolicyRole CreateManagerRole()
+        {
+            PermissionPolicyRole role = ObjectSpace.FirstOrDefault<PermissionPolicyRole>(r => r.Name == "Manager");
+            if (role == null)
+            {
+                role = ObjectSpace.CreateObject<PermissionPolicyRole>();
+                role.Name = "Manager";
+                role.PermissionPolicy = SecurityPermissionPolicy.DenyAllByDefault;
+
+                role.AddTypePermissionsRecursively<ApplicationUser>(SecurityOperations.CRUDAccess, SecurityPermissionState.Allow);
+                role.AddTypePermissionsRecursively<ApplicationUser>(SecurityOperations.Navigate, SecurityPermissionState.Allow);
+                role.AddTypePermissionsRecursively<PermissionPolicyRole>(SecurityOperations.Read, SecurityPermissionState.Allow);
+
+                role.AddNavigationPermission(@"Application/NavigationItems/Items/Default/Items/ApplicationUser_ListView", SecurityPermissionState.Allow);
+                role.AddNavigationPermission(@"Application/NavigationItems/Items/Default/Items/PermissionPolicyRole_ListView", SecurityPermissionState.Allow);
+
+                role.AddMemberPermissionFromLambda<ApplicationUser>(
+                    SecurityOperations.Write, "StoredPassword",
+                    cm => cm.ID == (Guid)CurrentUserIdOperator.CurrentUserId(),
+                    SecurityPermissionState.Allow);
+                role.AddMemberPermissionFromLambda<ApplicationUser>(
+                    SecurityOperations.Write, "ChangePasswordOnFirstLogon",
+                    cm => cm.ID == (Guid)CurrentUserIdOperator.CurrentUserId(),
+                    SecurityPermissionState.Allow);
+
+                role.AddTypePermissionsRecursively<ModelDifference>(SecurityOperations.ReadWriteAccess, SecurityPermissionState.Allow);
+                role.AddTypePermissionsRecursively<ModelDifference>(SecurityOperations.Create, SecurityPermissionState.Allow);
+                role.AddTypePermissionsRecursively<ModelDifferenceAspect>(SecurityOperations.ReadWriteAccess, SecurityPermissionState.Allow);
+                role.AddTypePermissionsRecursively<ModelDifferenceAspect>(SecurityOperations.Create, SecurityPermissionState.Allow);
+            }
+            return role;
+        }
+        PermissionPolicyRole CreateReadOnlyRole()
+        {
+            PermissionPolicyRole role = ObjectSpace.FirstOrDefault<PermissionPolicyRole>(r => r.Name == "ReadOnly");
+            if (role == null)
+            {
+                role = ObjectSpace.CreateObject<PermissionPolicyRole>();
+                role.Name = "ReadOnly";
+                role.PermissionPolicy = SecurityPermissionPolicy.DenyAllByDefault;
+
+                role.AddTypePermissionsRecursively<ApplicationUser>(SecurityOperations.Read, SecurityPermissionState.Allow);
+                role.AddTypePermissionsRecursively<ApplicationUser>(SecurityOperations.Navigate, SecurityPermissionState.Allow);
+                role.AddTypePermissionsRecursively<PermissionPolicyRole>(SecurityOperations.Read, SecurityPermissionState.Allow);
+
+                role.AddNavigationPermission(@"Application/NavigationItems/Items/Default/Items/MyDetails", SecurityPermissionState.Allow);
+
+                role.AddObjectPermission<ModelDifference>(SecurityOperations.ReadWriteAccess, "UserId = ToStr(CurrentUserId())", SecurityPermissionState.Allow);
+                role.AddObjectPermission<ModelDifferenceAspect>(SecurityOperations.ReadWriteAccess, "Owner.UserId = ToStr(CurrentUserId())", SecurityPermissionState.Allow);
+                role.AddTypePermissionsRecursively<ModelDifference>(SecurityOperations.Create, SecurityPermissionState.Allow);
+                role.AddTypePermissionsRecursively<ModelDifferenceAspect>(SecurityOperations.Create, SecurityPermissionState.Allow);
+            }
+            return role;
         }
     }
 }
